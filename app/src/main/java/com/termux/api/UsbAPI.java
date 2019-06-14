@@ -1,6 +1,7 @@
 package com.termux.api;
 
 import android.annotation.SuppressLint;
+import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -19,6 +20,9 @@ import java.util.HashMap;
 import java.util.Iterator;
 
 public class UsbAPI {
+
+    private static final String ACTION_USB_PERMISSION = "com.termux.api.usb.USB_PERMISSION";
+
     static void onReceiveUsbInfo(TermuxApiReceiver apiReceiver, final Context context, final Intent intent) {
         ResultReturner.returnData(apiReceiver, intent, new ResultReturner.ResultJsonWriter() {
             @Override
@@ -26,6 +30,7 @@ public class UsbAPI {
                 UsbManager manager = (UsbManager) context.getApplicationContext().getSystemService(Context.USB_SERVICE);
                 HashMap<String, UsbDevice> deviceList = manager.getDeviceList();
                 Iterator<UsbDevice> deviceIterator = deviceList.values().iterator();
+                out.beginArray();
                 out.beginObject();
                 while (deviceIterator.hasNext()) {
                     UsbDevice device = deviceIterator.next();
@@ -38,11 +43,14 @@ public class UsbAPI {
                     out.name("product_id").value("0x"+Integer.toHexString(device.getProductId()));
                 }
                 out.endObject();
+                out.endArray();
             }
         });
     }
 
     static void onReceiveUsbOpen(TermuxApiReceiver apiReceiver, final Context context, final Intent intent) {
+	int vendorId = intent.getIntExtra("vendorId", 0);
+	int productId = intent.getIntExtra("productId", 0);
         ResultReturner.returnData(apiReceiver, intent, new ResultReturner.ResultJsonWriter() {
             @Override
             public void writeJson(JsonWriter out) throws Exception {
@@ -51,33 +59,43 @@ public class UsbAPI {
                 Iterator<UsbDevice> deviceIterator = deviceList.values().iterator();
                 UsbDevice device;
                 UsbDeviceConnection connection = null;
+                PendingIntent mPermissionIntent = PendingIntent.getBroadcast(context, 0, new Intent(ACTION_USB_PERMISSION), 0);
+                out.beginArray();
                 out.beginObject();
+                out.name("vendorId").value(vendorId);
+                out.name("productId").value(productId);
+                out.endObject();
+
                 while (deviceIterator.hasNext()) {
                     device = deviceIterator.next();
-                    out.name("vendor_id").value(device.getVendorId());
-                    if (device.getVendorId() == 5008) {
+                    //out.beginObject().name("vendor_id").value(device.getVendorId()).endObject();
+
+                    if ((vendorId == 0 || device.getVendorId() == vendorId) && (productId == 0 || device.getProductId() == productId)) {
+                        if (! manager.hasPermission(device)) {
+                            manager.requestPermission(device, mPermissionIntent);
+                        }
                         connection = manager.openDevice(device);
+                        out.beginObject().name("fd").value(connection.getFileDescriptor()).endObject();
                         break;
                     }
                 }
 
+                if (connection == null) {
+                    out.beginObject().name("Connection").value("failed").endObject();
+                } else {
+                    out.beginObject().name("Connection").value("succeeded").endObject();
+                }
                 //manager.RequestPermission(device, mPermissionIntent);
                 //bool hasPermision = manager.HasPermission(device);
                 //UsbInterface intf = device.getInterface(0);
                 //UsbEndpoint endpoint = intf.getEndpoint(0);
                 //permissionIntent = PendingIntent.getBroadcast(0, new Intent(ACTION_USB_PERMISSION), 0);
                 //usbManager.requestPermission(device, permissionIntent);
-
-                if (connection == null) {
-                    out.name("connection failed");
-                } else {
-                    out.name("connection succeeded");
-                }
-                out.endObject();
+                out.endArray();
             }
         });
     }
-    
+
     static String translateDeviceClass(int usbClass){
         switch(usbClass){
         case UsbConstants.USB_CLASS_APP_SPEC:
