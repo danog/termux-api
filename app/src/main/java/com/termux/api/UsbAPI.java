@@ -9,6 +9,7 @@ import android.hardware.usb.UsbConstants;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
+import android.os.SystemClock;
 import android.text.TextUtils;
 import android.text.format.Formatter;
 import android.util.JsonWriter;
@@ -60,30 +61,36 @@ public class UsbAPI {
                 UsbDevice device;
                 UsbDeviceConnection connection = null;
                 PendingIntent mPermissionIntent = PendingIntent.getBroadcast(context, 0, new Intent(ACTION_USB_PERMISSION), 0);
+
+                Integer vendorId = intent.getIntExtra("vendorid", -1);
+                Integer productId = intent.getIntExtra("productid", -1);
                 out.beginArray();
                 out.beginObject();
-                out.name("vendorId").value(vendorId);
-                out.name("productId").value(productId);
-                out.endObject();
+
+                out.name("vendorid").value(intent.getIntExtra("vendorid", -1));
+                out.name("productid").value(intent.getIntExtra("productid", -1));
 
                 while (deviceIterator.hasNext()) {
                     device = deviceIterator.next();
-                    //out.beginObject().name("vendor_id").value(device.getVendorId()).endObject();
-
-                    if ((vendorId == 0 || device.getVendorId() == vendorId) && (productId == 0 || device.getProductId() == productId)) {
+                    if ((vendorId == 0 || Integer.toHexString(device.getVendorId()) == Integer.toString(vendorId)) && (productId == 0 || Integer.toHexString(device.getProductId()) == Integer.toString(productId))) {
                         if (! manager.hasPermission(device)) {
                             manager.requestPermission(device, mPermissionIntent);
                         }
-                        connection = manager.openDevice(device);
-                        out.beginObject().name("fd").value(connection.getFileDescriptor()).endObject();
+                        SystemClock.sleep(3000);
+                        if (manager.hasPermission(device)) {
+                            connection = manager.openDevice(device);
+                            if (connection != null) {
+                                out.name("fd").value(connection.getFileDescriptor());
+                            }
+                        }
                         break;
                     }
                 }
 
                 if (connection == null) {
-                    out.beginObject().name("Connection").value("failed").endObject();
+                    // out.beginObject().name("Connection").value("failed").endObject();
                 } else {
-                    out.beginObject().name("Connection").value("succeeded").endObject();
+                    // out.beginObject().name("Connection").value("succeeded").endObject();
                 }
                 //manager.RequestPermission(device, mPermissionIntent);
                 //bool hasPermision = manager.HasPermission(device);
@@ -91,11 +98,41 @@ public class UsbAPI {
                 //UsbEndpoint endpoint = intf.getEndpoint(0);
                 //permissionIntent = PendingIntent.getBroadcast(0, new Intent(ACTION_USB_PERMISSION), 0);
                 //usbManager.requestPermission(device, permissionIntent);
+                out.endObject();
                 out.endArray();
             }
         });
     }
 
+    static void onReceiveUsbClose(TermuxApiReceiver apiReceiver, final Context context, final Intent intent) {
+        ResultReturner.returnData(apiReceiver, intent, new ResultReturner.ResultJsonWriter() {
+            @Override
+            public void writeJson(JsonWriter out) throws Exception {
+                UsbManager manager = (UsbManager) context.getApplicationContext().getSystemService(Context.USB_SERVICE);
+                HashMap<String, UsbDevice> deviceList = manager.getDeviceList();
+                Iterator<UsbDevice> deviceIterator = deviceList.values().iterator();
+                UsbDevice device;
+                UsbDeviceConnection connection = null;
+
+                Integer vendorId = intent.getIntExtra("vendorid", -1);
+                Integer productId = intent.getIntExtra("productid", -1);
+
+                while (deviceIterator.hasNext()) {
+                    device = deviceIterator.next();
+                    if ((vendorId == 0 || device.getVendorId() == vendorId) && (productId == 0 || device.getProductId() == productId)) {
+                        if (manager.hasPermission(device)) {
+                            connection = manager.openDevice(device);
+                            if (connection != null) {
+                                out.beginObject().name("fd").value(connection.getFileDescriptor()).endObject();
+                                connection.close();
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+        });
+    }
     static String translateDeviceClass(int usbClass){
         switch(usbClass){
         case UsbConstants.USB_CLASS_APP_SPEC:
