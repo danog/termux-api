@@ -86,24 +86,13 @@ public class UsbAPI {
                         break;
                     }
                 }
-
-                if (connection == null) {
-                    // out.beginObject().name("Connection").value("failed").endObject();
-                } else {
-                    // out.beginObject().name("Connection").value("succeeded").endObject();
-                }
-                //manager.RequestPermission(device, mPermissionIntent);
-                //bool hasPermision = manager.HasPermission(device);
-                //UsbInterface intf = device.getInterface(0);
-                //UsbEndpoint endpoint = intf.getEndpoint(0);
-                //permissionIntent = PendingIntent.getBroadcast(0, new Intent(ACTION_USB_PERMISSION), 0);
-                //usbManager.requestPermission(device, permissionIntent);
                 out.endObject();
                 out.endArray();
             }
         });
     }
 
+    /*
     static void onReceiveUsbClose(TermuxApiReceiver apiReceiver, final Context context, final Intent intent) {
         ResultReturner.returnData(apiReceiver, intent, new ResultReturner.ResultJsonWriter() {
             @Override
@@ -133,6 +122,7 @@ public class UsbAPI {
             }
         });
     }
+    */
     static String translateDeviceClass(int usbClass){
         switch(usbClass){
         case UsbConstants.USB_CLASS_APP_SPEC:
